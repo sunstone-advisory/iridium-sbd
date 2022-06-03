@@ -4,32 +4,70 @@ import { TypedEmitter } from 'tiny-typed-emitter'
 import { compress } from './utils'
 
 const OK_REGEXP = /^OK/
+const ANY_REGEXP = /^.+/
 const ERROR_REGEXP = /^ERROR/
 const SBDRING_REGEXP = /^SBDRING/
 const DEFAULT_SIMPLE_TIMEOUT_MS = 2000
+const DEFAULT_LONG_TIMEOUT_MS = 30000
 const DEFAULT_SESSION_TIMEOUT_MS = 60000
 const INDEFINITE_TIMEOUT = -1
 
 export enum LogLevel {
-    DEBUG = 'DEBUG',
-    INFO = 'INFO',
-    WARN = 'WARN',
-    ERROR = 'ERROR',
-    CRITICAL = 'CRITICAL'
+  DEBUG = 'DEBUG',
+  INFO = 'INFO',
+  WARN = 'WARN',
+  ERROR = 'ERROR',
+  CRITICAL = 'CRITICAL'
 }
 
 export type LogEvent = {
-    level: LogLevel
-    message: string
-    datetime: Date
+  level: LogLevel
+  message: string
+  datetime: Date
 }
 
 export enum SignalQuality {
-    ONE = 1,
-    TWO = 2,
-    THREE = 3,
-    FOUR = 4,
-    FIVE = 5
+  ONE = 1,
+  TWO = 2,
+  THREE = 3,
+  FOUR = 4,
+  FIVE = 5
+}
+
+export enum ConfigProfile {
+  PROFILE_0 = 0,
+  PROFILE_1 = 1
+}
+
+export enum RingIndicationStatus {
+  NO_RING_ALERT_RECEIVED = 0,
+  RING_ALERT_RECEIVED = 1
+}
+
+export enum LockStatus {
+  UNLOCKED = 0,
+  LOCKED = 1,
+  PERMANENTLY_LOCKED = 2
+}
+
+export enum BaudRate {
+  RATE_600_BPS = 1,
+  RATE_1200_BPS = 2,
+  RATE_2400_BPS = 3,
+  RATE_4800_BPS = 4,
+  RATE_9600_BPS = 5,
+  RATE_19200_BPS = 6,
+  RATE_38400_BPS = 7,
+  RATE_57600_BPS = 8,
+  RATE_115200_BPS = 9
+}
+
+export enum NetworkRegistrationStatus {
+  DETACHED = 0,
+  NOT_REGISTERED = 1,
+  REGISTERED = 2,
+  REGISTRATION_DENIED = 3,
+  UNKNOWN = 4
 }
 
 export type SBDSessionResponse = {
@@ -41,6 +79,18 @@ export type SBDSessionResponse = {
     mtMessageSequenceNumber: number
     mtMessageLength: number
     mtMessagesQueued: number
+}
+
+export type SBDStatusResponse = {
+  moMessageInBuffer: boolean
+  mtMessageInBuffer: boolean
+  moMessageSequenceNumber: number
+  mtMessageSequenceNumber: number
+}
+
+export type SBDStatusExtendedResponse = SBDStatusResponse & {
+  unansweredRingAlert: boolean
+  messagesWaitingCount: number
 }
 
 export class SBDSessionError extends Error {
@@ -131,13 +181,13 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
             return reject(error)
           }
 
-          this.#logger.info('Connection to serial port has been opened')
-          this.disableFlowControl()
+          this.#logger.info(`Connection to serial port '${this.#serial.port.openOptions.path}' has been opened`)
+          this.flowControlDisable()
             .then(() => this.echoOff())
-            .then(() => this.disableSignalMonitoring())
+            .then(() => this.indicatorEventReportingDisable())
             .then(() => this.clearBuffers())
-            .then(() => this.enableAutoRegistration())
-            .then(() => this.enableRingAlert())
+            .then(() => this.autoRegistrationEnable())
+            .then(() => this.ringAlertEnable())
             .then(() => {
               resolve()
             })
@@ -182,7 +232,10 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
       }
 
       // append the response to the buffer
-      if (this.command.bufferRegex && this.command.bufferRegex.test(data)) {
+      if (this.command.bufferRegex &&
+        this.command.bufferRegex.test(data) &&
+        !this.command.successRegex.test(data) &&
+        this.command.text !== data) {
         if (this.#response === '') {
           this.#response += data
         } else {
@@ -220,6 +273,7 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
       clearTimeout(this.#timeoutFn)
     }
 
+    'ATE0' = this.echoOff
     async echoOff ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
       return this.#execute({
         text: 'ATE0',
@@ -229,67 +283,263 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
       }).then()
     }
 
-    async enableRingAlert ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
+    'ATE1' = this.echoOn
+    async echoOn ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
       return this.#execute({
-        text: 'AT+SBDMTA=1',
-        description: 'Enabling ring alert',
+        text: 'ATE1',
+        description: 'Turning echo on',
         timeoutMs,
         successRegex: OK_REGEXP
       }).then()
     }
 
-    async clearMOBuffers ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
+    'ATI3' = this.getSoftwareRevisionLevel
+    async getSoftwareRevisionLevel ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<string> {
       return this.#execute({
-        text: 'AT+SBDD0',
-        description: 'Clearing MO buffer',
+        text: 'ATI3',
+        description: 'Querying the software revision level',
+        timeoutMs,
+        bufferRegex: ANY_REGEXP,
+        successRegex: OK_REGEXP
+      })
+    }
+
+    'ATI4' = this.getProductDescription
+    async getProductDescription ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<string> {
+      return this.#execute({
+        text: 'ATI4',
+        description: 'Querying the product description',
+        timeoutMs,
+        bufferRegex: ANY_REGEXP,
+        successRegex: OK_REGEXP
+      })
+    }
+
+    'ATI7' = this.getHardwareSpecification
+    async getHardwareSpecification ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<string> {
+      return this.#execute({
+        text: 'ATI7',
+        description: 'Querying the hardware specification',
+        timeoutMs,
+        bufferRegex: ANY_REGEXP,
+        successRegex: OK_REGEXP
+      })
+    }
+
+    'ATQ0' = this.quietModeOff
+    async quietModeOff ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
+      return this.#execute({
+        text: 'ATQ0',
+        description: 'Turning quiet mode off. 9602 responses will be sent to the DTE',
         timeoutMs,
         successRegex: OK_REGEXP
       }).then()
     }
 
-    async clearMTBuffers ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
+    // Removed as quiet mode needs to be enabled for the library to work
+    /*
+    'ATQ1' = this.quietModeOn
+    async quietModeOn ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
       return this.#execute({
-        text: 'AT+SBDD1',
-        description: 'Clearing MT buffer',
+        text: 'ATQ1',
+        description: 'Turning quiet mode on. 9602 responses will not be sent to the DTE',
+        timeoutMs,
+        successRegex: OK_REGEXP
+      }).then()
+    }
+    */
+
+    // Removed as verbose mode needs to be enabled for the library to work
+    /*
+    'ATV0' = this.verboseModeOff
+    async verboseModeOff ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
+      return this.#execute({
+        text: 'ATV0',
+        description: 'Turning verbose mode off (textual responses disabled)',
+        timeoutMs,
+        successRegex: OK_REGEXP
+      }).then()
+    }
+    */
+
+    'ATV1' = this.verboseModeOn
+    async verboseModeOn ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
+      return this.#execute({
+        text: 'ATV1',
+        description: 'Turning verbose mode on (textual responses enabled)',
         timeoutMs,
         successRegex: OK_REGEXP
       }).then()
     }
 
-    async clearBuffers ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
+    'ATZn' = this.restoreUserConfig
+    async restoreUserConfig ({ profile, timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { profile: ConfigProfile, timeoutMs?: number }): Promise<void> {
       return this.#execute({
-        text: 'AT+SBDD2',
-        description: 'Clearing MO/MT buffers',
+        text: `ATZ${profile}`,
+        description: `Soft reset. Restoring user configuration ${profile}`,
         timeoutMs,
         successRegex: OK_REGEXP
       }).then()
     }
 
-    async disableFlowControl ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
+    'AT&F0' = this.restoreFactorySettings
+    async restoreFactorySettings ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
+      return this.#execute({
+        text: 'AT&F0',
+        description: 'Restoring factory settings',
+        timeoutMs,
+        successRegex: OK_REGEXP
+      }).then()
+    }
+
+    'AT&K0' = this.flowControlDisable
+    async flowControlDisable ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
       return this.#execute({
         text: 'AT&K0',
-        description: 'Disabling flow control',
+        description: 'Disabling RTS/CTS flow control',
         timeoutMs,
         successRegex: OK_REGEXP
       }).then()
     }
 
-    async enableAutoRegistration ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
+    'AT&K3' = this.flowControlEnable
+    async flowControlEnable ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
       return this.#execute({
-        text: 'AT+SBDAREG=1',
-        description: 'Enabling automatic registration',
+        text: 'AT&K3',
+        description: 'Enabling RTS/CTS flow control',
         timeoutMs,
         successRegex: OK_REGEXP
       }).then()
     }
 
-    async disableSignalMonitoring ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
+    'AT&V' = this.getActiveStoredConfig
+    async getActiveStoredConfig ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<string> {
       return this.#execute({
-        text: 'AT+CIER=1,0,0,0',
-        description: 'Turning network signal monitoring off',
+        text: 'AT&V',
+        description: 'Retrieving active and stored configuration profiles',
+        timeoutMs,
+        successRegex: OK_REGEXP,
+        bufferRegex: ANY_REGEXP
+      })
+      // TODO: Parse this into an object
+    }
+
+    'AT&Wn' = this.saveActiveConfig
+    async saveActiveConfig ({ profile, timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { profile: ConfigProfile, timeoutMs?: number }): Promise<void> {
+      return this.#execute({
+        text: `AT&W${profile}`,
+        description: `Storing current (active) configuration as profile ${profile}`,
         timeoutMs,
         successRegex: OK_REGEXP
       }).then()
+    }
+
+    'AT&Yn' = this.designateDefaultResetProfile
+    async designateDefaultResetProfile ({ profile, timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { profile: ConfigProfile, timeoutMs?: number }): Promise<void> {
+      return this.#execute({
+        text: `AT&Y${profile}`,
+        description: `Setting profile ${profile} as default power up configuration`,
+        timeoutMs,
+        successRegex: OK_REGEXP
+      }).then()
+    }
+
+    'AT%R' = this.getSRegisters
+    async getSRegisters ({ timeoutMs = DEFAULT_LONG_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<string> {
+      return this.#execute({
+        text: 'AT%R',
+        description: 'Retrieving the system S-Registers',
+        timeoutMs,
+        successRegex: OK_REGEXP,
+        bufferRegex: ANY_REGEXP
+      })
+      // TODO: Parse these into an array of objects.
+    }
+
+    'AT*F' = this.prepareForShutdown
+    async prepareForShutdown ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
+      return this.#execute({
+        text: 'AT*F',
+        description: 'Preparing for power down. Radio will be disabled and all pending writes flushed to the EEPROM',
+        timeoutMs,
+        successRegex: OK_REGEXP
+      }).then()
+    }
+
+    'AT*R0' = this.radioActivityDisable
+    async radioActivityDisable ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
+      return this.#execute({
+        text: 'AT*R0',
+        description: 'Disabling radio activity',
+        timeoutMs,
+        successRegex: OK_REGEXP
+      }).then()
+    }
+
+    'AT*R1' = this.radioActivityEnable
+    async radioActivityEnable ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
+      return this.#execute({
+        text: 'AT*R1',
+        description: 'Enabling radio activity',
+        timeoutMs,
+        successRegex: OK_REGEXP
+      }).then()
+    }
+
+    'AT+CCLK' = this.getIridiumSystemTime
+    async getIridiumSystemTime ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<string> {
+      return this.#execute({
+        text: 'AT+CCLK',
+        description: 'Querying the Iridium system time if available',
+        timeoutMs,
+        successRegex: OK_REGEXP,
+        bufferRegex: ANY_REGEXP
+      })
+    }
+
+    'AT+CGMI' = this.getDeviceManufacturer
+    async getDeviceManufacturer ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<string> {
+      return this.#execute({
+        text: 'AT+CGMI',
+        description: 'Querying the device manufacturer',
+        timeoutMs,
+        successRegex: OK_REGEXP,
+        bufferRegex: ANY_REGEXP
+      })
+    }
+
+    'AT+CGMM' = this.getDeviceModel
+    async getDeviceModel ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<string> {
+      return this.#execute({
+        text: 'AT+CGMM',
+        description: 'Querying the device model',
+        timeoutMs,
+        successRegex: OK_REGEXP,
+        bufferRegex: ANY_REGEXP
+      })
+    }
+
+    'AT+CGMR' = this.getDeviceModelRevision
+    async getDeviceModelRevision ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<string> {
+      return this.#execute({
+        text: 'AT+CGMR',
+        description: 'Querying the device model revision',
+        timeoutMs,
+        successRegex: OK_REGEXP,
+        bufferRegex: ANY_REGEXP
+      })
+      // TODO: Parse response into object.
+    }
+
+    'AT+CGSN' = this.getDeviceSerialNumber
+    async getDeviceSerialNumber ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<string> {
+      return this.#execute({
+        text: 'AT+CGSN',
+        description: 'Querying the device serial number',
+        timeoutMs,
+        successRegex: OK_REGEXP,
+        bufferRegex: ANY_REGEXP
+      })
     }
 
     async waitForNetwork ({ signalQuality = SignalQuality.ONE, timeoutMs = INDEFINITE_TIMEOUT }: { signalQuality?: SignalQuality, timeoutMs?: number } = {}): Promise<void> {
@@ -298,18 +548,107 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
         description: `Turning network signal monitoring on. Waiting for signal quality of ${signalQuality}`,
         timeoutMs,
         successRegex: new RegExp(`^\\+CIEV:0,[${signalQuality}-5]`)
-      }).then(() => this.disableSignalMonitoring())
+      }).then(() => this.indicatorEventReportingDisable())
     }
 
-    async writeShortBurstData ({ text, timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { text: string, timeoutMs?: number }): Promise<void> {
+    'AT+CIER=1,1,0,0' = this.signalMonitoringEnable
+    async signalMonitoringEnable ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
+      // TODO: This may conflict with serviceAvailabilityMonitoringEnable
       return this.#execute({
-        text: 'AT+SBDWT=' + text,
-        description: 'Writing short burst data to buffer',
+        text: 'AT+CIER=1,1,0,0',
+        description: 'Turning network signal monitoring on',
         timeoutMs,
         successRegex: OK_REGEXP
       }).then()
     }
 
+    'AT+CIER=1,0,1,0' = this.serviceAvailabilityMonitoringEnable
+    async serviceAvailabilityMonitoringEnable ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
+      // TODO: This may conflict with signalMonitoringEnable
+      return this.#execute({
+        text: 'AT+CIER=1,0,1,0',
+        description: 'Turning service availability monitoring on',
+        timeoutMs,
+        successRegex: OK_REGEXP
+      }).then()
+    }
+
+    'AT+CIER=1,0,0,0' = this.indicatorEventReportingDisable
+    async indicatorEventReportingDisable ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
+      // TODO: This may conflict with signalMonitoringEnable
+      return this.#execute({
+        text: 'AT+CIER=1,0,0,0',
+        description: 'Turning indicator event monitoring off',
+        timeoutMs,
+        successRegex: OK_REGEXP
+      }).then()
+    }
+
+    'AT+CRIS' = this.getRingIndicationStatus
+    async getRingIndicationStatus ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<RingIndicationStatus> {
+      return this.#execute({
+        text: 'AT+CRIS',
+        description: 'Querying the ring indication status',
+        timeoutMs,
+        successRegex: OK_REGEXP,
+        bufferRegex: /^\+CRIS:[0-1]/
+      }).then((result) => result.split(',')[1][0] as unknown as RingIndicationStatus)
+    }
+
+    'AT+CSQ' = this.getSignalQuality
+    async getSignalQuality ({ timeoutMs = DEFAULT_LONG_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<SignalQuality> {
+      return this.#execute({
+        text: 'AT+CSQ',
+        description: 'Querying the signal quality',
+        timeoutMs,
+        successRegex: OK_REGEXP,
+        bufferRegex: /^\+CSQ:/
+      }).then((result) => result.split(':')[1] as unknown as SignalQuality)
+    }
+
+    'AT+CULK' = this.unlockDevice
+    async unlockDevice ({ unlockKey, timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { unlockKey: string, timeoutMs?: number }): Promise<void> {
+      return this.#execute({
+        text: 'AT+CULK=' + unlockKey,
+        description: 'Attempting to unlock the device',
+        timeoutMs,
+        successRegex: OK_REGEXP,
+        bufferRegex: /^\+CULK:[0-2]/
+      }).then((result) => {
+        const status = result.split(':')[1] as unknown as LockStatus
+        switch (status) {
+          case 0:
+            return
+          case 1:
+            throw Error('Unlock key was not correct')
+          case 2:
+            throw Error('Device is permanently locked')
+        }
+      })
+    }
+
+    'AT+CULK?' = this.getLockStatus
+    async getLockStatus ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<LockStatus> {
+      return this.#execute({
+        text: 'AT+CULK?',
+        description: 'Querying the lock status',
+        timeoutMs,
+        successRegex: OK_REGEXP,
+        bufferRegex: /^\+CULK:[0-2]/
+      }).then((result) => result.split(':')[1] as unknown as LockStatus)
+    }
+
+    'AT+IPR=' = this.setFixedDTERate
+    async setFixedDTERate ({ baudRate, timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { baudRate: BaudRate, timeoutMs?: number }): Promise<void> {
+      return this.#execute({
+        text: `AT+IPR=${baudRate}`,
+        description: `Updating the fixed DTE rate to ${BaudRate[baudRate]}`,
+        timeoutMs,
+        successRegex: OK_REGEXP
+      }).then()
+    }
+
+    'AT+SBDWB=' = this.writeBinaryShortBurstData
     async writeBinaryShortBurstData ({ buffer, timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { buffer: Buffer, timeoutMs?: number }): Promise<void> {
       // copy into a new buffer and calculate/set the checksum.
       // the checksum should be the least significant 2-bytes
@@ -365,18 +704,86 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
       })
     }
 
-    async initiateSession ({ timeoutMs = DEFAULT_SESSION_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<SBDSessionResponse> {
+    'AT+SBDRB' = this.readShortBurstBinaryData
+    async readShortBurstBinaryData ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
+      return this.#execute({
+        text: 'AT+SBDRB',
+        description: 'Reading short burst binary data from the MT buffer',
+        timeoutMs,
+        successRegex: OK_REGEXP
+      }).then()
+    }
+
+    'AT+SBDWT=' = this.writeShortBurstTextData
+    async writeShortBurstTextData ({ text, timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { text: string, timeoutMs?: number }): Promise<void> {
+      return this.#execute({
+        text: 'AT+SBDWT=' + text,
+        description: 'Writing short burst text data to buffer',
+        timeoutMs,
+        successRegex: OK_REGEXP
+      }).then()
+    }
+
+    'AT+SBDRT' = this.readShortBurstTextData
+    async readShortBurstTextData ({ timeoutMs = INDEFINITE_TIMEOUT }: { timeoutMs?: number } = {}): Promise<string> {
+      return this.#execute({
+        text: 'AT+SBDRT',
+        description: 'Reading short burst text data from the MT buffer',
+        timeoutMs,
+        successRegex: /^SBDRT:/,
+        bufferRegex: /^SBDRT:/
+      })
+        .then((response) => {
+          const data = response.match(/SBDRT:[^]{2}(.*)/)
+          const message = data[1]
+          this.#logger.info('Received new message: ' + message)
+          this.emit('inbound-message', message)
+          return message
+        }).finally(() => this.clearMTBuffer())
+    }
+
+    'AT+SBDDET' = this.detatch
+    async detatch ({ timeoutMs = DEFAULT_SESSION_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
+      return this.#execute({
+        text: 'AT+SBDDET',
+        description: 'Requesting the transciever stop receving ring alerts from the gateway (detach operation)',
+        timeoutMs,
+        successRegex: OK_REGEXP,
+        bufferRegex: /^\+SBDDET:[0-1],[0-99]/
+      })
+        .then((result) => {
+          const data = result.match(/\+SBDDET:(\d+),(\d+)/)
+          if (data) {
+            const detStatus = parseInt(data[1])
+            const detErrorCode = parseInt(data[2])
+            const detErrorText = lookupDetachError(detErrorCode)
+
+            if (detStatus === 0) {
+              // success
+              return
+            }
+
+            this.#logger.info('Error occured when attempting to detatch from the GSS: ' + detErrorText)
+            throw new SBDSessionError('Unable to detatch from the GSS: ' + detErrorText)
+          } else {
+            throw new SBDSessionError(`Unexpected SBDDET response: ${result}`)
+          }
+        })
+    }
+
+    'AT+SBDIX' = this.initiateSessionExtended
+    async initiateSessionExtended ({ timeoutMs = DEFAULT_SESSION_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<SBDSessionResponse> {
       return this.#execute({
         text: 'AT+SBDIX',
         description: 'Initiating SBD session',
         timeoutMs,
-        successRegex: /^OK/,
+        successRegex: OK_REGEXP,
         bufferRegex: /^\+SBDIX:/
       })
         .then((result) => {
           const data = result.match(/\+SBDIX: (\d+), (\d+), (\d+), (\d+), (\d+), (\d+)/)
 
-          if (data.length > 0) {
+          if (data) {
             const moStatus = parseInt(data[1])
             const moStatusText = lookupMOStatus(moStatus)
             const moMessageSequenceNumber = parseInt(data[2])
@@ -412,7 +819,7 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
               return response
             } else if (mtStatus === 1) {
               this.#logger.info('Attempting to read MT message from the buffer')
-              return this.readMessage().then(() => response)
+              return this.readShortBurstTextData().then(() => response)
             } else if (mtStatus === 2) {
               // TODO: If failOnMailboxCheckError --> Throw Error?
               return response
@@ -423,21 +830,250 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
         })
     }
 
-    async readMessage ({ timeoutMs = INDEFINITE_TIMEOUT }: { timeoutMs?: number } = {}): Promise<string> {
+    'AT+SBDMTA=?' = this.getRingAlertEnabled
+    async getRingAlertEnabled ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<boolean> {
       return this.#execute({
-        text: 'AT+SBDRT',
-        description: 'Reading MT message from the buffer',
+        text: 'AT+SBDMTA=?',
+        description: 'Querying ring indication mode',
         timeoutMs,
-        successRegex: /^SBDRT:/,
-        bufferRegex: /^SBDRT:/
+        successRegex: OK_REGEXP,
+        bufferRegex: /^\+SBDMTA:[0-1]/
+      }).then((result) => {
+        return result.split(':')[0] === '1'
       })
-        .then((response) => {
-          const data = response.match(/SBDRT:[^]{2}(.*)/)
-          const message = data[1]
-          this.#logger.info('Received new message: ' + message)
-          this.emit('inbound-message', message)
-          return message
-        }).finally(() => this.clearMTBuffers())
+    }
+
+    'AT+SBDMTA=0' = this.ringAlertDisable
+    async ringAlertDisable ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
+      return this.#execute({
+        text: 'AT+SBDMTA=0',
+        description: 'Disabling ring alert',
+        timeoutMs,
+        successRegex: OK_REGEXP
+      }).then()
+    }
+
+    'AT+SBDMTA=1' = this.ringAlertEnable
+    async ringAlertEnable ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
+      return this.#execute({
+        text: 'AT+SBDMTA=1',
+        description: 'Enabling ring alert',
+        timeoutMs,
+        successRegex: OK_REGEXP
+      }).then()
+    }
+
+    'AT+SBDREG?' = this.getNetworkRegistrationStatus
+    async getNetworkRegistrationStatus ({ timeoutMs = DEFAULT_SESSION_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<NetworkRegistrationStatus> {
+      return this.#execute({
+        text: 'AT+SBDREG?',
+        description: 'Querying SBD network registration status',
+        timeoutMs,
+        successRegex: OK_REGEXP,
+        bufferRegex: /^\+SBDREG:[0-3]/
+      }).then((result) => {
+        return result.split(':')[1] as unknown as number
+      })
+    }
+
+    'AT+SBDREG' = this.initiateNetworkRegistration
+    async initiateNetworkRegistration ({ timeoutMs = DEFAULT_SESSION_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
+      return this.#execute({
+        text: 'AT+SBDREG',
+        description: 'Initiating SBD network registration',
+        timeoutMs,
+        successRegex: OK_REGEXP,
+        bufferRegex: /^\+SBDREG:[0-3],[0-99]/
+      }).then((result) => {
+        const data = result.match(/\+SBDREG:(\d+),(\d+)/)
+
+        if (data) {
+          const status = parseInt(data[1])
+          const error = parseInt(data[2])
+
+          if (error !== 2) {
+            throw Error('Error occured with network registration')
+          }
+        } else {
+          throw new SBDSessionError(`Unexpected SBDIX response: ${result}`)
+        }
+      })
+    }
+
+    'AT+SBDAREG=0' = this.autoRegistrationDisable
+    async autoRegistrationDisable ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
+      return this.#execute({
+        text: 'AT+SBDAREG=0',
+        description: 'Disabling automatic registration',
+        timeoutMs,
+        successRegex: OK_REGEXP
+      }).then()
+    }
+
+    'AT+SBDAREG=1' = this.autoRegistrationEnable
+    async autoRegistrationEnable ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
+      return this.#execute({
+        text: 'AT+SBDAREG=1',
+        description: 'Enabling automatic registration',
+        timeoutMs,
+        successRegex: OK_REGEXP
+      }).then()
+    }
+
+    'AT+SBDD0' = this.clearMOBuffer
+    async clearMOBuffer ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
+      return this.#execute({
+        text: 'AT+SBDD0',
+        description: 'Clearing MO buffer',
+        timeoutMs,
+        successRegex: OK_REGEXP,
+        bufferRegex: /^[0-1]/
+      }).then((result) => {
+        if (result === '1') throw Error('An error occured while clearing the buffer')
+      })
+    }
+
+    'AT+SBDD1' = this.clearMTBuffer
+    async clearMTBuffer ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
+      return this.#execute({
+        text: 'AT+SBDD1',
+        description: 'Clearing MT buffer',
+        timeoutMs,
+        successRegex: OK_REGEXP,
+        bufferRegex: /^[0-1]/
+      }).then((result) => {
+        if (result === '1') throw Error('An error occured while clearing the buffer')
+      })
+    }
+
+    'AT+SBDD2' = this.clearBuffers
+    async clearBuffers ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
+      return this.#execute({
+        text: 'AT+SBDD2',
+        description: 'Clearing MO/MT buffers',
+        timeoutMs,
+        successRegex: OK_REGEXP,
+        bufferRegex: /^[0-1]/
+      }).then((result) => {
+        if (result === '1') throw Error('An error occured while clearing the buffers')
+      })
+    }
+
+    'AT+SBDC' = this.resetMOMSN
+    async resetMOMSN ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
+      return this.#execute({
+        text: 'AT+SBDC',
+        description: 'Resetting the MOMSN to 0',
+        timeoutMs,
+        successRegex: OK_REGEXP,
+        bufferRegex: /^[0-1]/
+      }).then((result) => {
+        if (result === '1') throw Error('An error occured while clearing the MOMSN')
+      })
+    }
+
+    'AT+SBDS' = this.getShortBurstDataStatus
+    async getShortBurstDataStatus ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<SBDStatusResponse> {
+      return this.#execute({
+        text: 'AT+SBDS',
+        description: 'Querying the short burst data status',
+        timeoutMs,
+        successRegex: OK_REGEXP,
+        bufferRegex: /^\+SBDS:/
+      }).then((result) => {
+        const data = result.match(/\+SBDS: (\d+), (\d+), (\d+), (-?\d+)/)
+
+        if (data) {
+          const moFlag = parseInt(data[1])
+          const moSeqNo = parseInt(data[2])
+          const mtFlag = parseInt(data[3])
+          const mtSeqNo = parseInt(data[4])
+
+          return {
+            moMessageInBuffer: !!moFlag,
+            moMessageSequenceNumber: moSeqNo,
+            mtMessageInBuffer: !!mtFlag,
+            mtMessageSequenceNumber: mtSeqNo
+          }
+        } else {
+          throw new Error(`Unexpected SBDS response: ${result}`)
+        }
+      })
+    }
+
+    'AT+SBDSX' = this.getShortBurstDataStatusExtended
+    async getShortBurstDataStatusExtended ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<SBDStatusExtendedResponse> {
+      return this.#execute({
+        text: 'AT+SBDSX',
+        description: 'Querying the short burst data status',
+        timeoutMs,
+        successRegex: OK_REGEXP,
+        bufferRegex: /^\+SBDSX:/
+      }).then((result) => {
+        const data = result.match(/\+SBDSX: (\d+), (\d+), (-?\d+), (\d+), (\d+), (\d+)/)
+
+        if (data) {
+          const moFlag = parseInt(data[1])
+          const moSeqNo = parseInt(data[2])
+          const mtFlag = parseInt(data[3])
+          const mtSeqNo = parseInt(data[4])
+          const ringAlertFlag = parseInt(data[5])
+          const messagesWaiting = parseInt(data[6])
+
+          return {
+            moMessageInBuffer: !!moFlag,
+            moMessageSequenceNumber: moSeqNo,
+            mtMessageInBuffer: !!mtFlag,
+            mtMessageSequenceNumber: mtSeqNo,
+            unansweredRingAlert: !!ringAlertFlag,
+            messagesWaitingCount: messagesWaiting
+          }
+        } else {
+          throw new Error(`Unexpected SBDSX response: ${result}`)
+        }
+      })
+    }
+
+    'AT+SBDTC' = this.transferMOBufferToMTBuffer
+    async transferMOBufferToMTBuffer ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<number> {
+      return this.#execute({
+        text: 'AT+SBDTC',
+        description: 'Transferring MO Buffer to MT Buffer',
+        timeoutMs,
+        successRegex: OK_REGEXP,
+        bufferRegex: ANY_REGEXP
+        // eg. SBDTC: Outbound SBD Copied to Inbound SBD: size = 123
+      }).then((result) => result.split('size = ')[1] as unknown as number)
+    }
+
+    'AT+SBDGW' = this.getIridiumGatewayType
+    async getIridiumGatewayType ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<string> {
+      return this.#execute({
+        text: 'AT+SBDGW',
+        description: 'Querying the Iridium gateway type (EMSS or non-EMSS)',
+        timeoutMs,
+        successRegex: OK_REGEXP,
+        bufferRegex: /^\+SBDGW:/
+      }).then((result) => result.split(': ')[1])
+    }
+
+    'AT-MSSTM' = this.getLatestNetworkSystemTime
+    async getLatestNetworkSystemTime ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<Date> {
+      return this.#execute({
+        text: 'AT-MSSTM',
+        description: 'Querying the latest network time from network',
+        timeoutMs,
+        successRegex: OK_REGEXP,
+        bufferRegex: /^-MSSTM:/
+      }).then((result) => {
+        const time = result.split(': ')[1]
+        if (time === 'no network service') {
+          throw Error('The 9602 has not yet received system time from the network')
+        }
+
+        const iridiumEpoch = new Date('2007-03-08T03:50:35').getTime()
+        return new Date(iridiumEpoch + parseInt(time))
+      })
     }
 
     async sendMessage (message: string, { signalQuality = SignalQuality.ONE, compressed = false, binary = true, timeoutMs = INDEFINITE_TIMEOUT }:
@@ -455,11 +1091,11 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
         // a timeout during session.
         (binary
           ? this.writeBinaryShortBurstData({ buffer: compressedBuffer ?? Buffer.from(message) })
-          : this.writeShortBurstData({ text: compressedBuffer ? compressedBuffer.toString('utf-8') : message }))
+          : this.writeShortBurstTextData({ text: compressedBuffer ? compressedBuffer.toString('utf-8') : message }))
           .then(() => this.waitForNetwork({ signalQuality }))
-          .then(() => this.initiateSession())
+          .then(() => this.initiateSessionExtended())
           .then((result) => {
-            this.clearMOBuffers()
+            this.clearMOBuffer()
               .then(() => resolve(result))
               .catch((error) => reject(error))
           })
@@ -509,6 +1145,62 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
         }
       })
     }
+}
+
+// TODO: Replace with generic reference data lookup function
+function lookupDetachError (code: number) {
+  switch (code) {
+    case 0:
+    case 1:
+    case 2:
+    case 3:
+    case 4:
+      return 'Detatch successfully performed'
+    case 5:
+    case 6:
+    case 7:
+    case 8:
+    case 9:
+    case 10:
+    case 11:
+    case 12:
+    case 13:
+    case 14:
+    case 15:
+      return 'An error occured while attempting the detatch'
+    case 16:
+      return 'Transceiver has been locked and may not make SBD calls (see +CULK command)'
+    case 17:
+      return 'Gateway not responding (local session timeout)'
+    case 18:
+      return 'Connection lost (RF drop)'
+    case 19:
+    case 20:
+    case 21:
+    case 22:
+    case 23:
+    case 24:
+    case 25:
+    case 26:
+    case 27:
+    case 28:
+    case 29:
+    case 30:
+    case 31:
+      return 'An error occured while attempting the detatch'
+    case 32:
+      return 'No network service, unable to initiate call'
+    case 33:
+      return 'Antenna fault, unable to initiate call'
+    case 34:
+      return 'Radio is disabled, unable to initiate call (see *Rn command)'
+    case 35:
+      return 'Transceiver is busy, unable to initiate call (typically performing auto-registration)'
+    case 36:
+      return 'An error occured while attempting the detatch'
+    default:
+      return 'Unknown response code received from the device'
+  }
 }
 
 // TODO: Replace with generic reference data lookup function
