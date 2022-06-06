@@ -901,7 +901,7 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
         const data = result.match(/\+SBDREG:(\d+),(\d+)/)
 
         if (data) {
-          const status = parseInt(data[1])
+          // const status = parseInt(data[1])
           const error = parseInt(data[2])
 
           if (error !== 2) {
