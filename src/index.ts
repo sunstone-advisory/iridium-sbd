@@ -119,6 +119,7 @@ export type IridiumCommand = {
 export interface IridiumControllerInterface {
     'log': (message: LogEvent) => void
     'inbound-message': (message: string) => void
+    'ring-alert': () => void
 }
 
 export class IridiumController extends TypedEmitter<IridiumControllerInterface> {
@@ -222,7 +223,7 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
       // check for unsolicited message types
       if (SBDRING_REGEXP.test(data)) {
-        // this.sbdRing()
+        this.emit('ring-alert')
         return
       }
 
@@ -234,12 +235,13 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
       // append the response to the buffer
       if (this.command.bufferRegex &&
         this.command.bufferRegex.test(data) &&
-        !this.command.successRegex.test(data) &&
         this.command.text !== data) {
-        if (this.#response === '') {
-          this.#response += data
-        } else {
-          this.#response += '\n' + data
+        if (this.command.successRegex.test(data) && this.command.bufferRegex !== this.command.successRegex) {
+          if (this.#response === '') {
+            this.#response += data
+          } else {
+            this.#response += '\n' + data
+          }
         }
       }
 
@@ -336,7 +338,7 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
       }).then()
     }
 
-    // Removed as quiet mode needs to be enabled for the library to work
+    // Removed as quiet mode needs to be disabled for the library to work
     /*
     'ATQ1' = this.quietModeOn
     async quietModeOn ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
@@ -603,6 +605,17 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
         timeoutMs,
         successRegex: OK_REGEXP,
         bufferRegex: /^\+CSQ:/
+      }).then((result) => result.split(':')[1] as unknown as SignalQuality)
+    }
+
+    'AT+CSQF' = this.getSignalQualityFast
+    async getSignalQualityFast ({ timeoutMs = DEFAULT_LONG_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<SignalQuality> {
+      return this.#execute({
+        text: 'AT+CSQF',
+        description: 'Querying the last known calculated signal quality',
+        timeoutMs,
+        successRegex: OK_REGEXP,
+        bufferRegex: /^\+CSQF:/
       }).then((result) => result.split(':')[1] as unknown as SignalQuality)
     }
 
