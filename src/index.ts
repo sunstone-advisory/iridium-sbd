@@ -223,6 +223,7 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
       // check for unsolicited message types
       if (SBDRING_REGEXP.test(data)) {
+        this.#logger.debug('Received SBD ring alert, emitting ring-alert event')
         this.emit('ring-alert')
         return
       }
@@ -233,10 +234,13 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
       }
 
       // append the response to the buffer
-      if (this.command.bufferRegex &&
-        this.command.bufferRegex.test(data) &&
-        this.command.text !== data) {
-        if (this.command.successRegex.test(data) && this.command.bufferRegex !== this.command.successRegex) {
+      if (this.command.bufferRegex && // do we need to buffer the response
+        this.command.bufferRegex.test(data) && // does this match the buffer criteria
+        this.command.text !== data) { // ignore echo of commands back to port
+
+
+        if (this.command.bufferRegex !== this.command.successRegex && !this.command.successRegex.test(data)) {
+          
           if (this.#response === '') {
             this.#response += data
           } else {
@@ -743,12 +747,10 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
         text: 'AT+SBDRT',
         description: 'Reading short burst text data from the MT buffer',
         timeoutMs,
-        successRegex: /^SBDRT:/,
-        bufferRegex: /^SBDRT:/
+        successRegex: OK_REGEXP,
+        bufferRegex: /^(?!\+SBDRT:).+/
       })
-        .then((response) => {
-          const data = response.match(/SBDRT:[^]{2}(.*)/)
-          const message = data[1]
+        .then((message) => {
           this.#logger.info('Received new message: ' + message)
           this.emit('inbound-message', message)
           return message
@@ -784,14 +786,14 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
         })
     }
 
-    'AT+SBDIX' = this.initiateSessionExtended
+    'AT+SBDIXA' = this.initiateSessionExtended
     async initiateSessionExtended ({ timeoutMs = DEFAULT_SESSION_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<SBDSessionResponse> {
       return this.#execute({
-        text: 'AT+SBDIX',
+        text: 'AT+SBDIXA',
         description: 'Initiating SBD session',
         timeoutMs,
         successRegex: OK_REGEXP,
-        bufferRegex: /^\+SBDIX:/
+        bufferRegex: /^\+SBDIX:.+/
       })
         .then((result) => {
           const data = result.match(/\+SBDIX: (\d+), (\d+), (\d+), (\d+), (\d+), (\d+)/)
@@ -843,10 +845,10 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
         })
     }
 
-    'AT+SBDMTA=?' = this.getRingAlertEnabled
+    'AT+SBDMTA?' = this.getRingAlertEnabled
     async getRingAlertEnabled ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<boolean> {
       return this.#execute({
-        text: 'AT+SBDMTA=?',
+        text: 'AT+SBDMTA?',
         description: 'Querying ring indication mode',
         timeoutMs,
         successRegex: OK_REGEXP,
@@ -1087,6 +1089,12 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
         const iridiumEpoch = new Date('2007-03-08T03:50:35').getTime()
         return new Date(iridiumEpoch + parseInt(time))
       })
+    }
+
+    async mailboxCheck ({ signalQuality = SignalQuality.ONE, timeoutMs = INDEFINITE_TIMEOUT }:
+      { signalQuality?: SignalQuality, timeoutMs?: number } = {}): Promise<void> {
+        this.#logger.info('Performing mailbox check')
+        return this.sendMessage('', { signalQuality, timeoutMs, compressed: false, binary: false }).then()
     }
 
     async sendMessage (message: string, { signalQuality = SignalQuality.ONE, compressed = false, binary = true, timeoutMs = INDEFINITE_TIMEOUT }:
