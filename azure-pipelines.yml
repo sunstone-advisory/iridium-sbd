@@ -32,4 +32,4 @@ steps:
     GIT_AUTHOR_EMAIL: $(Build.RequestedForEmail)
     GIT_COMMITTER_NAME: Build Automation
     GIT_COMMITTER_EMAIL: support@cnect.com.au
-  condition: and(always(), ne(variables['Build.Reason'], 'PullRequest'))
+  condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
