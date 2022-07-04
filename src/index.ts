@@ -725,7 +725,7 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
             this.#logger.debug(`Response code ${code} - ${description}`)
 
-            if (code > 0) {
+            if (isNaN(code) || code > 0) {
               reject(Error(`Error writing binary message to buffer. ${description}`))
             }
 
