@@ -1109,12 +1109,30 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
     async mailboxCheck ({ signalQuality = SignalQuality.ONE, timeoutMs = INDEFINITE_TIMEOUT }:
       { signalQuality?: SignalQuality, timeoutMs?: number } = {}): Promise<void> {
-        this.#logger.info('Performing mailbox check')
-        return this.sendMessage('', { signalQuality, timeoutMs, compressed: false, binary: false }).then()
+      this.#logger.info('Performing mailbox check')
+      return this.sendTextMessage('', { signalQuality, timeoutMs, compressed: false }).then()
     }
 
-    async sendMessage (message: string, { signalQuality = SignalQuality.ONE, compressed = false, binary = true, timeoutMs = INDEFINITE_TIMEOUT }:
-        { signalQuality?: SignalQuality, compressed?: boolean, binary?: boolean, timeoutMs?: number }): Promise<SBDSessionResponse> {
+    async sendBinaryMessage (message: Buffer, { signalQuality = SignalQuality.ONE, timeoutMs = INDEFINITE_TIMEOUT }:
+      { signalQuality?: SignalQuality, timeoutMs?: number }): Promise<SBDSessionResponse> {
+      return new Promise((resolve, reject) => {
+      // TODO: add timeout function. will need to add
+      // new class property sessionInProgress to prevent
+      // a timeout during session.
+        this.writeBinaryShortBurstData({ buffer: message })
+          .then(() => this.waitForNetwork({ signalQuality }))
+          .then(() => this.initiateSessionExtended())
+          .then((result) => {
+            this.clearMOBuffer()
+              .then(() => resolve(result))
+              .catch((error) => reject(error))
+          })
+          .catch((error) => reject(error))
+      })
+    }
+
+    async sendTextMessage (message: string, { signalQuality = SignalQuality.ONE, compressed = false, timeoutMs = INDEFINITE_TIMEOUT }:
+        { signalQuality?: SignalQuality, compressed?: boolean, timeoutMs?: number }): Promise<SBDSessionResponse> {
       let compressedBuffer: Buffer
       if (compressed) {
         compressedBuffer = compress(message)
@@ -1126,9 +1144,7 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
         // TODO: add timeout function. will need to add
         // new class property sessionInProgress to prevent
         // a timeout during session.
-        (binary
-          ? this.writeBinaryShortBurstData({ buffer: compressedBuffer ?? Buffer.from(message) })
-          : this.writeShortBurstTextData({ text: compressedBuffer ? compressedBuffer.toString('utf-8') : message }))
+        this.writeShortBurstTextData({ text: compressedBuffer ? compressedBuffer.toString('utf-8') : message })
           .then(() => this.waitForNetwork({ signalQuality }))
           .then(() => this.initiateSessionExtended())
           .then((result) => {
