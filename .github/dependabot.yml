@@ -1,0 +1,14 @@
+version: 2
+registries:
+  npm-azure-artifacts:
+    type: npm-registry
+    url: https://pkgs.dev.azure.com/sunstone-advisory/iot-bluebottle/_packaging/main/npm/registry/
+    username: build.automation@sunstoneadvisory.com.au
+    password: ${{ secrets.AZURE_DEVOPS_BUILD_AUTOMATION_PAT }}
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    registries:
+      - npm-azure-artifacts
+    schedule:
+      interval: "daily"
