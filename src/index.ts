@@ -249,28 +249,27 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
         return
       }
 
-      // append the response to the buffer
-      if (this.command.bufferRegex && // do we need to buffer the response
-        this.command.bufferRegex.test(data) && // does this match the buffer criteria
-        this.command.text !== data) { // ignore echo of commands back to port
-
-
-        if (this.command.bufferRegex !== this.command.successRegex && !this.command.successRegex.test(data)) {
-          
-          if (this.#response === '') {
-            this.#response += data
-          } else {
-            this.#response += '\n' + data
-          }
-        }
-      }
-
       // if this is an unexpected error invoke the reject fn
       if (ERROR_REGEXP.test(data)) {
         this.#logger.debug('Received error response, calling reject handler')
         this.rejectFn(this.#response)
         this.#clearContext()
         return
+      }
+
+      // append the response to the buffer
+      if (this.command.bufferRegex && // do we need to buffer the response
+            this.command.bufferRegex.test(data) && // does this match the buffer criteria
+            this.command.text !== data) { // ignore echo of commands back to port
+        // if (!(
+        //  this.command.bufferRegex === this.command.successRegex &&
+        //  this.command.successRegex === OK_REGEXP)) {
+        if (this.#response === '') {
+          this.#response += data
+        } else {
+          this.#response += '\n' + data
+        }
+        // }
       }
 
       // if this is the expected end invoke the resolve fn
