@@ -198,6 +198,22 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
     }
 
     /**
+     * Closes the connection the the Serial Port.
+     */
+    async close (): Promise<void> {
+      return new Promise((resolve, reject) => {
+        if (this.#serial.isOpen) {
+          this.#serial.close((error) => {
+            if (error) return reject(error)
+            resolve()
+          })
+        } else {
+          resolve()
+        }
+      })
+    }
+
+    /**
      * Logger object to control output from the Iridium
      * Controller. Log messages are created as {LogEvent}
      * objects and emitted through the 'log' event.
