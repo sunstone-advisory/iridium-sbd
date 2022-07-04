@@ -3,7 +3,7 @@ import { TypedEmitter } from 'tiny-typed-emitter'
 
 import { compress } from './utils'
 
-const OK_REGEXP = /^OK/
+const OK_REGEXP = /^OK$/
 const ANY_REGEXP = /^.+/
 const ERROR_REGEXP = /^ERROR/
 const SBDRING_REGEXP = /^SBDRING/
@@ -108,6 +108,7 @@ export type IridiumCommand = {
     timeoutMs: number
     successRegex: RegExp
     bufferRegex?: RegExp
+    errorRegex?: RegExp
 } & ({
     buffer: Buffer
     text?: never
@@ -250,7 +251,7 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
       }
 
       // if this is an unexpected error invoke the reject fn
-      if (ERROR_REGEXP.test(data)) {
+      if ((this.command.errorRegex ?? ERROR_REGEXP).test(data)) {
         this.#logger.debug('Received error response, calling reject handler')
         this.rejectFn(this.#response)
         this.#clearContext()
