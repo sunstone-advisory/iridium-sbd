@@ -19,7 +19,7 @@ const INDEFINITE_TIMEOUT = -1
 
 export interface IridiumControllerInterface {
   'log': (message: LogEvent) => void
-  'inbound-message': (message: string) => void
+  'inbound-message': (message: Buffer) => void
   'ring-alert': () => void
 }
 
@@ -79,7 +79,7 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
   async echoOff ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
     return this.#controller.execute({
       text: 'ATE0',
-      description: 'Turning echo offs',
+      description: 'Turning echo off',
       timeoutMs,
       successRegex: OK_REGEXP,
       errorRegex: ERROR_REGEXP
@@ -555,14 +555,21 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
   }
 
   'AT+SBDRB' = this.readShortBurstBinaryData
-  async readShortBurstBinaryData ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
+  async readShortBurstBinaryData ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<Buffer> {
     return this.#controller.execute({
       text: 'AT+SBDRB',
       description: 'Reading short burst binary data from the MT buffer',
       timeoutMs,
       successRegex: OK_REGEXP,
+      bufferRegex: /^(?!\+SBDRB:|OK\s?$).+/,
       errorRegex: ERROR_REGEXP
-    }).then()
+    })
+      .then((message) => {
+        const buffer = Buffer.from(message, 'hex')
+        this.#logger.info('Received new message: [BINARY]' + buffer.toString('hex'))
+        this.emit('inbound-message', buffer)
+        return buffer
+      }).finally(() => this.clearMTBuffer())
   }
 
   'AT+SBDWT=' = this.writeShortBurstTextData
@@ -577,19 +584,20 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
   }
 
   'AT+SBDRT' = this.readShortBurstTextData
-  async readShortBurstTextData ({ timeoutMs = INDEFINITE_TIMEOUT }: { timeoutMs?: number } = {}): Promise<string> {
+  async readShortBurstTextData ({ timeoutMs = INDEFINITE_TIMEOUT }: { timeoutMs?: number } = {}): Promise<Buffer> {
     return this.#controller.execute({
       text: 'AT+SBDRT',
       description: 'Reading short burst text data from the MT buffer',
       timeoutMs,
       successRegex: OK_REGEXP,
-      bufferRegex: /^(?!\+SBDRT:).+/,
+      bufferRegex: /^(?!\+SBDRT:|OK\s?$).+/,
       errorRegex: ERROR_REGEXP
     })
       .then((message) => {
+        const buffer = Buffer.from(message)
         this.#logger.info('Received new message: ' + message)
-        this.emit('inbound-message', message)
-        return message
+        this.emit('inbound-message', buffer)
+        return buffer
       }).finally(() => this.clearMTBuffer())
   }
 
@@ -672,7 +680,7 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
             return response
           } else if (mtStatus === 1) {
             this.#logger.info('Attempting to read MT message from the buffer')
-            return this.readShortBurstTextData().then(() => response)
+            return this.readShortBurstBinaryData().then(() => response)
           } else if (mtStatus === 2) {
             // TODO: If failOnMailboxCheckError --> Throw Error?
             return response
