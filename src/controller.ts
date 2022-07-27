@@ -64,6 +64,9 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
         .then(() => this.clearBuffers())
         .then(() => this.autoRegistrationEnable())
         .then(() => this.ringAlertEnable())
+        .then(() => this.getRingIndicationStatus())
+        .then((status) =>
+          status === RingIndicationStatus.RING_ALERT_RECEIVED ? this.mailboxCheck : 0)
         .then(() => {
           resolve()
         })
@@ -424,7 +427,7 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
       successRegex: OK_REGEXP,
       bufferRegex: /^\+CRIS:[0-1]/,
       errorRegex: ERROR_REGEXP
-    }).then((result) => result.split(',')[1][0] as unknown as RingIndicationStatus)
+    }).then((result) => parseInt(result.split(',')[1]) as RingIndicationStatus)
   }
 
   'AT+CSQ' = this.getSignalQuality
