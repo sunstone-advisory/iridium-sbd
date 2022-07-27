@@ -425,7 +425,7 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
       description: 'Querying the ring indication status',
       timeoutMs,
       successRegex: OK_REGEXP,
-      bufferRegex: /^\+CRIS:[0-1]/,
+      bufferRegex: /^\+CRIS:[0-1]{3},[0-1]{3}/,
       errorRegex: ERROR_REGEXP
     }).then((result) => parseInt(result.split(',')[1]) as RingIndicationStatus)
   }
