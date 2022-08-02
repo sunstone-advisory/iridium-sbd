@@ -65,8 +65,6 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
         .then(() => this.autoRegistrationEnable())
         .then(() => this.ringAlertEnable())
         .then(() => this.getRingIndicationStatus())
-        .then((status) =>
-          status === RingIndicationStatus.RING_ALERT_RECEIVED ? this.mailboxCheck : 0)
         .then(() => {
           resolve()
         })
@@ -80,8 +78,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'ATE0' = this.echoOff
   async echoOff ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
-    return this.#controller.execute({
-      text: 'ATE0',
+    return this.#controller.regexRequest({
+      data: 'ATE0',
       description: 'Turning echo off',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -91,8 +89,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'ATE1' = this.echoOn
   async echoOn ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
-    return this.#controller.execute({
-      text: 'ATE1',
+    return this.#controller.regexRequest({
+      data: 'ATE1',
       description: 'Turning echo on',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -102,8 +100,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'ATI3' = this.getSoftwareRevisionLevel
   async getSoftwareRevisionLevel ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<string> {
-    return this.#controller.execute({
-      text: 'ATI3',
+    return this.#controller.regexRequest({
+      data: 'ATI3',
       description: 'Querying the software revision level',
       timeoutMs,
       bufferRegex: ANY_REGEXP,
@@ -114,8 +112,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'ATI4' = this.getProductDescription
   async getProductDescription ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<string> {
-    return this.#controller.execute({
-      text: 'ATI4',
+    return this.#controller.regexRequest({
+      data: 'ATI4',
       description: 'Querying the product description',
       timeoutMs,
       bufferRegex: ANY_REGEXP,
@@ -126,8 +124,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'ATI7' = this.getHardwareSpecification
   async getHardwareSpecification ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<string> {
-    return this.#controller.execute({
-      text: 'ATI7',
+    return this.#controller.regexRequest({
+      data: 'ATI7',
       description: 'Querying the hardware specification',
       timeoutMs,
       bufferRegex: ANY_REGEXP,
@@ -138,8 +136,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'ATQ0' = this.quietModeOff
   async quietModeOff ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
-    return this.#controller.execute({
-      text: 'ATQ0',
+    return this.#controller.regexRequest({
+      data: 'ATQ0',
       description: 'Turning quiet mode off. 9602 responses will be sent to the DTE',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -151,8 +149,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
   /*
   'ATQ1' = this.quietModeOn
   async quietModeOn ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
-    return this.#controller.execute({
-      text: 'ATQ1',
+    return this.#controller.regexRequest({
+      requestData: 'ATQ1',
       description: 'Turning quiet mode on. 9602 responses will not be sent to the DTE',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -165,8 +163,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
   /*
   'ATV0' = this.verboseModeOff
   async verboseModeOff ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
-    return this.#controller.execute({
-      text: 'ATV0',
+    return this.#controller.regexRequest({
+      requestData: 'ATV0',
       description: 'Turning verbose mode off (textual responses disabled)',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -177,8 +175,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'ATV1' = this.verboseModeOn
   async verboseModeOn ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
-    return this.#controller.execute({
-      text: 'ATV1',
+    return this.#controller.regexRequest({
+      data: 'ATV1',
       description: 'Turning verbose mode on (textual responses enabled)',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -188,8 +186,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'ATZn' = this.restoreUserConfig
   async restoreUserConfig ({ profile, timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { profile: ConfigProfile, timeoutMs?: number }): Promise<void> {
-    return this.#controller.execute({
-      text: `ATZ${profile}`,
+    return this.#controller.regexRequest({
+      data: `ATZ${profile}`,
       description: `Soft reset. Restoring user configuration ${profile}`,
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -199,8 +197,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT&F0' = this.restoreFactorySettings
   async restoreFactorySettings ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
-    return this.#controller.execute({
-      text: 'AT&F0',
+    return this.#controller.regexRequest({
+      data: 'AT&F0',
       description: 'Restoring factory settings',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -210,8 +208,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT&K0' = this.flowControlDisable
   async flowControlDisable ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
-    return this.#controller.execute({
-      text: 'AT&K0',
+    return this.#controller.regexRequest({
+      data: 'AT&K0',
       description: 'Disabling RTS/CTS flow control',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -221,8 +219,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT&K3' = this.flowControlEnable
   async flowControlEnable ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
-    return this.#controller.execute({
-      text: 'AT&K3',
+    return this.#controller.regexRequest({
+      data: 'AT&K3',
       description: 'Enabling RTS/CTS flow control',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -232,8 +230,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT&V' = this.getActiveStoredConfig
   async getActiveStoredConfig ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<string> {
-    return this.#controller.execute({
-      text: 'AT&V',
+    return this.#controller.regexRequest({
+      data: 'AT&V',
       description: 'Retrieving active and stored configuration profiles',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -245,8 +243,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT&Wn' = this.saveActiveConfig
   async saveActiveConfig ({ profile, timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { profile: ConfigProfile, timeoutMs?: number }): Promise<void> {
-    return this.#controller.execute({
-      text: `AT&W${profile}`,
+    return this.#controller.regexRequest({
+      data: `AT&W${profile}`,
       description: `Storing current (active) configuration as profile ${profile}`,
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -256,8 +254,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT&Yn' = this.designateDefaultResetProfile
   async designateDefaultResetProfile ({ profile, timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { profile: ConfigProfile, timeoutMs?: number }): Promise<void> {
-    return this.#controller.execute({
-      text: `AT&Y${profile}`,
+    return this.#controller.regexRequest({
+      data: `AT&Y${profile}`,
       description: `Setting profile ${profile} as default power up configuration`,
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -267,8 +265,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT%R' = this.getSRegisters
   async getSRegisters ({ timeoutMs = DEFAULT_LONG_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<string> {
-    return this.#controller.execute({
-      text: 'AT%R',
+    return this.#controller.regexRequest({
+      data: 'AT%R',
       description: 'Retrieving the system S-Registers',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -280,8 +278,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT*F' = this.prepareForShutdown
   async prepareForShutdown ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
-    return this.#controller.execute({
-      text: 'AT*F',
+    return this.#controller.regexRequest({
+      data: 'AT*F',
       description: 'Preparing for power down. Radio will be disabled and all pending writes flushed to the EEPROM',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -291,8 +289,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT*R0' = this.radioActivityDisable
   async radioActivityDisable ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
-    return this.#controller.execute({
-      text: 'AT*R0',
+    return this.#controller.regexRequest({
+      data: 'AT*R0',
       description: 'Disabling radio activity',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -302,8 +300,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT*R1' = this.radioActivityEnable
   async radioActivityEnable ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
-    return this.#controller.execute({
-      text: 'AT*R1',
+    return this.#controller.regexRequest({
+      data: 'AT*R1',
       description: 'Enabling radio activity',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -313,8 +311,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT+CCLK' = this.getIridiumSystemTime
   async getIridiumSystemTime ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<string> {
-    return this.#controller.execute({
-      text: 'AT+CCLK',
+    return this.#controller.regexRequest({
+      data: 'AT+CCLK',
       description: 'Querying the Iridium system time if available',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -325,8 +323,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT+CGMI' = this.getDeviceManufacturer
   async getDeviceManufacturer ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<string> {
-    return this.#controller.execute({
-      text: 'AT+CGMI',
+    return this.#controller.regexRequest({
+      data: 'AT+CGMI',
       description: 'Querying the device manufacturer',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -337,8 +335,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT+CGMM' = this.getDeviceModel
   async getDeviceModel ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<string> {
-    return this.#controller.execute({
-      text: 'AT+CGMM',
+    return this.#controller.regexRequest({
+      data: 'AT+CGMM',
       description: 'Querying the device model',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -349,8 +347,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT+CGMR' = this.getDeviceModelRevision
   async getDeviceModelRevision ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<string> {
-    return this.#controller.execute({
-      text: 'AT+CGMR',
+    return this.#controller.regexRequest({
+      data: 'AT+CGMR',
       description: 'Querying the device model revision',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -362,8 +360,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT+CGSN' = this.getDeviceSerialNumber
   async getDeviceSerialNumber ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<string> {
-    return this.#controller.execute({
-      text: 'AT+CGSN',
+    return this.#controller.regexRequest({
+      data: 'AT+CGSN',
       description: 'Querying the device serial number',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -373,11 +371,11 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
   }
 
   async waitForNetwork ({ signalQuality = SignalQuality.ONE, timeoutMs = INDEFINITE_TIMEOUT }: { signalQuality?: SignalQuality, timeoutMs?: number } = {}): Promise<void> {
-    return this.#controller.execute({
-      text: 'AT+CIER=1,1,0,0',
+    return this.#controller.regexRequest({
+      data: 'AT+CIER=1,1,0,0',
       description: `Turning network signal monitoring on. Waiting for signal quality of ${signalQuality}`,
       timeoutMs,
-      successRegex: new RegExp(`^\\+CIEV:0,[${signalQuality}-5]`),
+      successRegex: new RegExp(`^\\+CIEV:0,[${signalQuality}-6]`),
       errorRegex: ERROR_REGEXP
     }).then(() => this.indicatorEventReportingDisable())
   }
@@ -385,8 +383,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
   'AT+CIER=1,1,0,0' = this.signalMonitoringEnable
   async signalMonitoringEnable ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
     // TODO: This may conflict with serviceAvailabilityMonitoringEnable
-    return this.#controller.execute({
-      text: 'AT+CIER=1,1,0,0',
+    return this.#controller.regexRequest({
+      data: 'AT+CIER=1,1,0,0',
       description: 'Turning network signal monitoring on',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -397,8 +395,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
   'AT+CIER=1,0,1,0' = this.serviceAvailabilityMonitoringEnable
   async serviceAvailabilityMonitoringEnable ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
     // TODO: This may conflict with signalMonitoringEnable
-    return this.#controller.execute({
-      text: 'AT+CIER=1,0,1,0',
+    return this.#controller.regexRequest({
+      data: 'AT+CIER=1,0,1,0',
       description: 'Turning service availability monitoring on',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -409,8 +407,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
   'AT+CIER=1,0,0,0' = this.indicatorEventReportingDisable
   async indicatorEventReportingDisable ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
     // TODO: This may conflict with signalMonitoringEnable
-    return this.#controller.execute({
-      text: 'AT+CIER=1,0,0,0',
+    return this.#controller.regexRequest({
+      data: 'AT+CIER=1,0,0,0',
       description: 'Turning indicator event monitoring off',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -419,52 +417,59 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
   }
 
   'AT+CRIS' = this.getRingIndicationStatus
-  async getRingIndicationStatus ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<RingIndicationStatus> {
-    return this.#controller.execute({
-      text: 'AT+CRIS',
+  async getRingIndicationStatus ({ notifyAlert = true, timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { notifyAlert?: boolean, timeoutMs?: number } = {}): Promise<RingIndicationStatus> {
+    return this.#controller.regexRequest({
+      data: 'AT+CRIS',
       description: 'Querying the ring indication status',
       timeoutMs,
       successRegex: OK_REGEXP,
       bufferRegex: /^\+CRIS:[0-1]{3},[0-1]{3}/,
       errorRegex: ERROR_REGEXP
-    }).then((result) => parseInt(result.split(',')[1]) as RingIndicationStatus)
+    }).then((result) => {
+      const status = parseInt(result.split(',')[1]) as RingIndicationStatus
+      if (notifyAlert && status === RingIndicationStatus.RING_ALERT_RECEIVED) {
+        this.#logger.debug('Unanswered SBD ring alert, emitting ring-alert event')
+        this.emit('ring-alert')
+      }
+      return status
+    })
   }
 
   'AT+CSQ' = this.getSignalQuality
   async getSignalQuality ({ timeoutMs = DEFAULT_LONG_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<SignalQuality> {
-    return this.#controller.execute({
-      text: 'AT+CSQ',
+    return this.#controller.regexRequest({
+      data: 'AT+CSQ',
       description: 'Querying the signal quality',
       timeoutMs,
       successRegex: OK_REGEXP,
       bufferRegex: /^\+CSQ:/,
       errorRegex: ERROR_REGEXP
-    }).then((result) => result.split(':')[1] as unknown as SignalQuality)
+    }).then((result) => parseInt(result.split(':')[1]) as SignalQuality)
   }
 
   'AT+CSQF' = this.getSignalQualityFast
   async getSignalQualityFast ({ timeoutMs = DEFAULT_LONG_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<SignalQuality> {
-    return this.#controller.execute({
-      text: 'AT+CSQF',
+    return this.#controller.regexRequest({
+      data: 'AT+CSQF',
       description: 'Querying the last known calculated signal quality',
       timeoutMs,
       successRegex: OK_REGEXP,
       bufferRegex: /^\+CSQF:/,
       errorRegex: ERROR_REGEXP
-    }).then((result) => result.split(':')[1] as unknown as SignalQuality)
+    }).then((result) => parseInt(result.split(':')[1]) as SignalQuality)
   }
 
   'AT+CULK' = this.unlockDevice
   async unlockDevice ({ unlockKey, timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { unlockKey: string, timeoutMs?: number }): Promise<void> {
-    return this.#controller.execute({
-      text: 'AT+CULK=' + unlockKey,
+    return this.#controller.regexRequest({
+      data: 'AT+CULK=' + unlockKey,
       description: 'Attempting to unlock the device',
       timeoutMs,
       successRegex: OK_REGEXP,
       bufferRegex: /^\+CULK:[0-2]/,
       errorRegex: ERROR_REGEXP
     }).then((result) => {
-      const status = result.split(':')[1] as unknown as LockStatus
+      const status = parseInt(result.split(':')[1]) as LockStatus
       switch (status) {
         case 0:
           return
@@ -478,20 +483,20 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT+CULK?' = this.getLockStatus
   async getLockStatus ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<LockStatus> {
-    return this.#controller.execute({
-      text: 'AT+CULK?',
+    return this.#controller.regexRequest({
+      data: 'AT+CULK?',
       description: 'Querying the lock status',
       timeoutMs,
       successRegex: OK_REGEXP,
       bufferRegex: /^\+CULK:[0-2]/,
       errorRegex: ERROR_REGEXP
-    }).then((result) => result.split(':')[1] as unknown as LockStatus)
+    }).then((result) => parseInt(result.split(':')[1]) as LockStatus)
   }
 
   'AT+IPR=' = this.setFixedDTERate
   async setFixedDTERate ({ baudRate, timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { baudRate: BaudRate, timeoutMs?: number }): Promise<void> {
-    return this.#controller.execute({
-      text: `AT+IPR=${baudRate}`,
+    return this.#controller.regexRequest({
+      data: `AT+IPR=${baudRate}`,
       description: `Updating the fixed DTE rate to ${BaudRate[baudRate]}`,
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -522,16 +527,16 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
     output[output.length - 2] = sum & 0xff
 
     return new Promise((resolve, reject) => {
-      this.#controller.execute({
-        text: 'AT+SBDWB=' + buffer.length,
+      this.#controller.regexRequest({
+        data: 'AT+SBDWB=' + buffer.length,
         description: 'Initiating start of binary data write to the buffer',
         timeoutMs,
         successRegex: /^READY/,
         errorRegex: ERROR_REGEXP
       })
         .then(() => {
-          return this.#controller.execute({
-            buffer: output,
+          return this.#controller.regexRequest({
+            data: output,
             description: 'Writing binary data to the buffer',
             timeoutMs: INDEFINITE_TIMEOUT,
             successRegex: /^[0-3]/,
@@ -559,26 +564,25 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT+SBDRB' = this.readShortBurstBinaryData
   async readShortBurstBinaryData ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<Buffer> {
-    return this.#controller.execute({
-      text: 'AT+SBDRB',
+    return this.#controller.binaryRequest({
+      data: 'AT+SBDRB',
       description: 'Reading short burst binary data from the MT buffer',
-      timeoutMs,
-      successRegex: OK_REGEXP,
-      bufferRegex: /^(?!\+SBDRB:|OK\s?$).+/,
-      errorRegex: ERROR_REGEXP
+      interval: 300,
+      maxBufferSize: 274
     })
-      .then((message) => {
-        const buffer = Buffer.from(message, 'hex')
-        this.#logger.info('Received new message: [BINARY]' + buffer.toString('hex'))
-        this.emit('inbound-message', buffer)
+      .then((buffer) => {
+        const messageLength = buffer.readUInt16BE(0)
+        const message = buffer.subarray(2, messageLength + 2)
+        this.#logger.info('Received new message: [BINARY] ' + message.toString('hex'))
+        this.emit('inbound-message', message)
         return buffer
       }).finally(() => this.clearMTBuffer())
   }
 
   'AT+SBDWT=' = this.writeShortBurstTextData
   async writeShortBurstTextData ({ text, timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { text: string, timeoutMs?: number }): Promise<void> {
-    return this.#controller.execute({
-      text: 'AT+SBDWT=' + text,
+    return this.#controller.regexRequest({
+      data: 'AT+SBDWT=' + text,
       description: 'Writing short burst text data to buffer',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -588,8 +592,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT+SBDRT' = this.readShortBurstTextData
   async readShortBurstTextData ({ timeoutMs = INDEFINITE_TIMEOUT }: { timeoutMs?: number } = {}): Promise<Buffer> {
-    return this.#controller.execute({
-      text: 'AT+SBDRT',
+    return this.#controller.regexRequest({
+      data: 'AT+SBDRT',
       description: 'Reading short burst text data from the MT buffer',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -606,8 +610,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT+SBDDET' = this.detatch
   async detatch ({ timeoutMs = DEFAULT_SESSION_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
-    return this.#controller.execute({
-      text: 'AT+SBDDET',
+    return this.#controller.regexRequest({
+      data: 'AT+SBDDET',
       description: 'Requesting the transciever stop receving ring alerts from the gateway (detach operation)',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -636,8 +640,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT+SBDIXA' = this.initiateSessionExtended
   async initiateSessionExtended ({ timeoutMs = DEFAULT_SESSION_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<SBDSessionResponse> {
-    return this.#controller.execute({
-      text: 'AT+SBDIXA',
+    return this.#controller.regexRequest({
+      data: 'AT+SBDIXA',
       description: 'Initiating SBD session',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -696,8 +700,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT+SBDMTA?' = this.getRingAlertEnabled
   async getRingAlertEnabled ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<boolean> {
-    return this.#controller.execute({
-      text: 'AT+SBDMTA?',
+    return this.#controller.regexRequest({
+      data: 'AT+SBDMTA?',
       description: 'Querying ring indication mode',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -710,8 +714,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT+SBDMTA=0' = this.ringAlertDisable
   async ringAlertDisable ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
-    return this.#controller.execute({
-      text: 'AT+SBDMTA=0',
+    return this.#controller.regexRequest({
+      data: 'AT+SBDMTA=0',
       description: 'Disabling ring alert',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -721,8 +725,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT+SBDMTA=1' = this.ringAlertEnable
   async ringAlertEnable ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
-    return this.#controller.execute({
-      text: 'AT+SBDMTA=1',
+    return this.#controller.regexRequest({
+      data: 'AT+SBDMTA=1',
       description: 'Enabling ring alert',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -732,8 +736,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT+SBDREG?' = this.getNetworkRegistrationStatus
   async getNetworkRegistrationStatus ({ timeoutMs = DEFAULT_SESSION_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<NetworkRegistrationStatus> {
-    return this.#controller.execute({
-      text: 'AT+SBDREG?',
+    return this.#controller.regexRequest({
+      data: 'AT+SBDREG?',
       description: 'Querying SBD network registration status',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -746,8 +750,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT+SBDREG' = this.initiateNetworkRegistration
   async initiateNetworkRegistration ({ timeoutMs = DEFAULT_SESSION_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
-    return this.#controller.execute({
-      text: 'AT+SBDREG',
+    return this.#controller.regexRequest({
+      data: 'AT+SBDREG',
       description: 'Initiating SBD network registration',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -771,8 +775,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT+SBDAREG=0' = this.autoRegistrationDisable
   async autoRegistrationDisable ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
-    return this.#controller.execute({
-      text: 'AT+SBDAREG=0',
+    return this.#controller.regexRequest({
+      data: 'AT+SBDAREG=0',
       description: 'Disabling automatic registration',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -782,8 +786,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT+SBDAREG=1' = this.autoRegistrationEnable
   async autoRegistrationEnable ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
-    return this.#controller.execute({
-      text: 'AT+SBDAREG=1',
+    return this.#controller.regexRequest({
+      data: 'AT+SBDAREG=1',
       description: 'Enabling automatic registration',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -793,8 +797,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT+SBDD0' = this.clearMOBuffer
   async clearMOBuffer ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
-    return this.#controller.execute({
-      text: 'AT+SBDD0',
+    return this.#controller.regexRequest({
+      data: 'AT+SBDD0',
       description: 'Clearing MO buffer',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -807,8 +811,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT+SBDD1' = this.clearMTBuffer
   async clearMTBuffer ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
-    return this.#controller.execute({
-      text: 'AT+SBDD1',
+    return this.#controller.regexRequest({
+      data: 'AT+SBDD1',
       description: 'Clearing MT buffer',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -821,8 +825,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT+SBDD2' = this.clearBuffers
   async clearBuffers ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
-    return this.#controller.execute({
-      text: 'AT+SBDD2',
+    return this.#controller.regexRequest({
+      data: 'AT+SBDD2',
       description: 'Clearing MO/MT buffers',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -835,8 +839,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT+SBDC' = this.resetMOMSN
   async resetMOMSN ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<void> {
-    return this.#controller.execute({
-      text: 'AT+SBDC',
+    return this.#controller.regexRequest({
+      data: 'AT+SBDC',
       description: 'Resetting the MOMSN to 0',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -849,8 +853,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT+SBDS' = this.getShortBurstDataStatus
   async getShortBurstDataStatus ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<SBDStatusResponse> {
-    return this.#controller.execute({
-      text: 'AT+SBDS',
+    return this.#controller.regexRequest({
+      data: 'AT+SBDS',
       description: 'Querying the short burst data status',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -879,8 +883,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT+SBDSX' = this.getShortBurstDataStatusExtended
   async getShortBurstDataStatusExtended ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<SBDStatusExtendedResponse> {
-    return this.#controller.execute({
-      text: 'AT+SBDSX',
+    return this.#controller.regexRequest({
+      data: 'AT+SBDSX',
       description: 'Querying the short burst data status',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -913,12 +917,12 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT+SBDTC' = this.transferMOBufferToMTBuffer
   async transferMOBufferToMTBuffer ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<number> {
-    return this.#controller.execute({
-      text: 'AT+SBDTC',
+    return this.#controller.regexRequest({
+      data: 'AT+SBDTC',
       description: 'Transferring MO Buffer to MT Buffer',
       timeoutMs,
-      successRegex: OK_REGEXP,
-      bufferRegex: ANY_REGEXP,
+      successRegex: /^SBDTC:/,
+      bufferRegex: /^SBDTC:/,
       errorRegex: ERROR_REGEXP
       // eg. SBDTC: Outbound SBD Copied to Inbound SBD: size = 123
     }).then((result) => result.split('size = ')[1] as unknown as number)
@@ -926,8 +930,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT+SBDGW' = this.getIridiumGatewayType
   async getIridiumGatewayType ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<string> {
-    return this.#controller.execute({
-      text: 'AT+SBDGW',
+    return this.#controller.regexRequest({
+      data: 'AT+SBDGW',
       description: 'Querying the Iridium gateway type (EMSS or non-EMSS)',
       timeoutMs,
       successRegex: OK_REGEXP,
@@ -938,8 +942,8 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT-MSSTM' = this.getLatestNetworkSystemTime
   async getLatestNetworkSystemTime ({ timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<Date> {
-    return this.#controller.execute({
-      text: 'AT-MSSTM',
+    return this.#controller.regexRequest({
+      data: 'AT-MSSTM',
       description: 'Querying the latest network time from network',
       timeoutMs,
       successRegex: OK_REGEXP,

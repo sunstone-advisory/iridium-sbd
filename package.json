@@ -33,7 +33,7 @@
     },
     "dependencies": {
         "serialport": "^10.4.0",
-        "serialport-synchronous": "^1.0.0",
+        "serialport-synchronous": "^1.1.0",
         "tiny-typed-emitter": "^2.1.0",
         "unishox2.siara.cc": "^1.0.1"
     },
