@@ -57,7 +57,7 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   async init (): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.#controller.open()
+      this.open()
         .then(() => this.flowControlDisable())
         .then(() => this.echoOff())
         .then(() => this.indicatorEventReportingDisable())
@@ -70,6 +70,10 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
         })
         .catch((error) => reject(error))
     })
+  }
+
+  async open () {
+    return this.#controller.open()
   }
 
   async close () {
