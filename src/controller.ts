@@ -72,6 +72,10 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
     })
   }
 
+  isOpen () {
+    return this.#controller.isOpen()
+  }
+
   async open () {
     return this.#controller.open()
   }

@@ -1,6 +1,9 @@
 {
   "extends": "./tsconfig.build.json",
   "compilerOptions": {
-    "baseUrl": "."
+    "baseUrl": ".",
+    "paths": {
+      "serialport-synchronous": ["../serialport-sync/src"]
+    }
   }
 }
