@@ -667,7 +667,7 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
           const moStatusText = lookupMOStatus(moStatus)
           const moMessageSequenceNumber = parseInt(data[2])
           const mtStatus = parseInt(data[3])
-          const mtStatusText = lookupMTStatus(moStatus)
+          const mtStatusText = lookupMTStatus(mtStatus)
           const mtMessageSequenceNumber = parseInt(data[4])
           const mtMessageLength = parseInt(data[5])
           const mtMessagesQueued = parseInt(data[6])
@@ -697,7 +697,6 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
           if (mtStatus === 0) {
             return response
           } else if (mtStatus === 1) {
-            this.#logger.info('Attempting to read MT message from the buffer')
             return this.readShortBurstBinaryData().then(() => response)
           } else if (mtStatus === 2) {
             // TODO: If failOnMailboxCheckError --> Throw Error?
