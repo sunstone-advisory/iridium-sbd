@@ -1,11 +1,19 @@
 import { TypedEmitter } from 'tiny-typed-emitter'
 import { SerialPortController } from 'serialport-synchronous'
-import { compress } from './utils'
 import { SBDSessionError } from './error'
+import { calculateChecksum, compress } from './utils'
 import {
-  LogEvent, LogLevel, BaudRate, ConfigProfile, LockStatus,
-  NetworkRegistrationStatus, RingIndicationStatus, SBDSessionResponse,
-  SBDStatusExtendedResponse, SBDStatusResponse, SignalQuality
+  LogEvent,
+  LogLevel,
+  BaudRate,
+  ConfigProfile,
+  LockStatus,
+  NetworkRegistrationStatus,
+  RingIndicationStatus,
+  SBDSessionResponse,
+  SBDStatusExtendedResponse,
+  SBDStatusResponse,
+  SignalQuality
 } from './types'
 
 const OK_REGEXP = /^OK$/
@@ -65,6 +73,7 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
         .then(() => this.autoRegistrationEnable())
         .then(() => this.ringAlertEnable())
         .then(() => this.getRingIndicationStatus())
+        .then(() => this.getSignalQualityFast())
         .then(() => {
           resolve()
         })
@@ -514,35 +523,29 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
 
   'AT+SBDWB=' = this.writeBinaryShortBurstData
   async writeBinaryShortBurstData ({ buffer, timeoutMs = DEFAULT_SIMPLE_TIMEOUT_MS }: { buffer: Buffer, timeoutMs?: number }): Promise<void> {
-    // copy into a new buffer and calculate/set the checksum.
-    // the checksum should be the least significant 2-bytes
-    // of the summation of the entire SBD message.
-    const output = Buffer.alloc(buffer.length + 2)
-
-    let sum = 0
-    for (let i = 0; i < buffer.length; i++) {
-      output[i] = buffer[i]
-      sum += buffer[i]
-    }
-
-    // set the least significant byte of the message summation
-    output[output.length - 1] = sum & 0xff
-
-    // drop the least significant byte
-    sum >>= 8
-
-    // set the (second) least significant byte of the message summation
-    output[output.length - 2] = sum & 0xff
+    const checksum = calculateChecksum(buffer)
+    const output = Buffer.concat([buffer, checksum])
 
     return new Promise((resolve, reject) => {
       this.#controller.regexRequest({
         data: 'AT+SBDWB=' + buffer.length,
         description: 'Initiating start of binary data write to the buffer',
         timeoutMs,
-        successRegex: /^READY/,
+        successRegex: /^READY|[0-3]/,
         errorRegex: ERROR_REGEXP
       })
-        .then(() => {
+        .then((result) => {
+          if (result.match(/^[0-3]/)) {
+            const code = parseInt(result)
+            const description = lookupWriteBinaryResult(code)
+
+            this.#logger.debug(`Response code ${code} - ${description}`)
+
+            if (isNaN(code) || code > 0) {
+              reject(Error(`Error writing binary message to buffer. ${description}`))
+            }
+          }
+
           return this.#controller.regexRequest({
             data: output,
             description: 'Writing binary data to the buffer',
@@ -581,7 +584,7 @@ export class IridiumController extends TypedEmitter<IridiumControllerInterface> 
       .then((buffer) => {
         const messageLength = buffer.readUInt16BE(0)
         const message = buffer.subarray(2, messageLength + 2)
-        this.#logger.info('Received new message: [BINARY] ' + message.toString('hex'))
+        this.#logger.info('Emitting new message: [BINARY] ' + message.toString('hex'))
         this.emit('inbound-message', message)
         return buffer
       }).finally(() => this.clearMTBuffer())
