@@ -11,6 +11,8 @@ const controller = new IridiumController({
 })
 
 controller.on('log', (log) => console[log.level.toLowerCase()](log.message));
+controller.on('ring-alert', () => controller.mailboxCheck())
+controller.on('inbound-message', (buffer) => console.log(`Received new message: ${buffer.toString()}`))
 
 try {
   // open the serial port and init the iridium modem
